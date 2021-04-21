@@ -105,6 +105,11 @@
           - git
           - make
 
+          # Required for assisted installer
+          - dnsmasq
+          - libvirt-devel
+          - virt-install
+
     - name: Enable helpful services
       service: name={{ item }} enabled=yes state=started
       with_items:
