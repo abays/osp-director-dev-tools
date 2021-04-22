@@ -1,7 +1,7 @@
 ---
 - hosts: convergence_base
-  gather_facts: false
   become: true
+  gather_facts: false
 
   tasks:
   - name: Include default variables
@@ -11,7 +11,7 @@
     include_vars: vars/ocp_ai.yaml
 
 
-### VERIFICATION
+  ### VERIFICATION
 
   # FIXME: Here to enforce use of 4.7 for now
   - fail:
@@ -19,13 +19,13 @@
     when: ocp_version != 4.7
 
 
-### ASSISTED INSTALLER CLI BINARY
+  ### ASSISTED INSTALLER CLI BINARY
 
   - name: Install assisted installer CLI
     command: pip3 install aicli
 
-### ADDITIONAL SET-FACTS
-  
+  ### ADDITIONAL SET-FACTS
+
   - name: Set fact for full cluster name
     set_fact:
       ocp_ai_full_cluster_name: "{{ ocp_cluster_name }}.{{ ocp_domain_name | default('test.metalkube.org', true) }}"
@@ -44,7 +44,7 @@
         ocp_ai_pr_cidr_prefix: "{{ ((ocp_ai_bm_bridge_cidr.split('.'))[0:3])|join('.') }}"
 
 
-### BRIDGES
+  ### BRIDGES
 
   # FIXME?: Should this task target the playbook host instead?
   - name: Install needed network manager libs
@@ -113,7 +113,7 @@
         - pr
         
 
-### FIREWALL
+  ### FIREWALL
 
   - name: Prepare firewall
     block:
@@ -128,12 +128,7 @@
       when: ocp_ai_ext_intf.stdout == ""
 
     - name: Add BM bridge to libvirt zone
-      firewalld:
-        interface: "{{ ocp_cluster_name }}bm"
-        state: enabled
-        zone: libvirt
-        permanent: yes
-        immediate: yes
+      command: firewall-cmd --zone libvirt --change-interface ostestbm --permanent
 
     - name: Add TCP firewall rules for BM bridge
       firewalld:
@@ -150,12 +145,7 @@
         - 8888
 
     - name: Add provisioning bridge to libvirt zone
-      firewalld:
-        interface: "{{ ocp_cluster_name }}pr"
-        state: enabled
-        zone: libvirt
-        permanent: yes
-        immediate: yes
+      command: firewall-cmd --zone libvirt --change-interface ostestpr --permanent
 
     - name: Add TCP firewall rules for provisioning bridge
       firewalld:
@@ -200,7 +190,7 @@
         firewall-cmd --reload
     
 
-### DNSMASQ
+  ### DNSMASQ
 
   - name: Prepare dnsmasq
     block:
@@ -228,7 +218,7 @@
       for i in $(virsh net-list | grep -v Autostart | grep -v "---------------" | awk {'print $1'}); do
         virsh net-destroy $i
       done
-  
+
   - name: Start dnsmasq
     service:
       name: dnsmasq
@@ -241,71 +231,71 @@
         dest: "/etc/resolv.conf"
         mode: '0644'
 
-### VMs
+  ### VMs
 
   - name: Provision VMs for use with the assisted installer
     block:
     - name: Delete existing VMs and disk QCOW2s (if any)
       shell: |
-        for i in $(virsh list | grep "{{ ocp_cluster_name }}_" | awk {"print $2"}); do
+        for i in $(virsh list | grep "{{ ocp_cluster_name }}-" | awk {"print $2"}); do
           virsh destroy $i
         done
 
-        for i in $(virsh list --all | grep "{{ ocp_cluster_name }}_" | awk {"print $2"}); do
-          virsh undefine $i
+        for i in $(virsh list --all | grep "{{ ocp_cluster_name }}-" | awk {"print $2"}); do
+          virsh undefine --nvram $i
           rm -f /var/lib/libvirt/images/$i.qcow2
         done
-        
+
     - name: Create AI OCP VM XML definitions
       shell: |
         for i in {1..{{ ocp_num_masters }}}; do
             sudo virt-install \
             --virt-type=kvm \
-            --name "{{ ocp_cluster_name }}_master_$((i-1))" \
+            --name "{{ ocp_cluster_name }}-master-$((i-1))" \
             --memory {{ ocp_master_memory }} \
             --vcpus={{ ocp_master_vcpu }} \
             --os-variant=rhel8.2 \
             --os-type linux \
             --network=bridge:{{ ocp_cluster_name }}bm,mac="{{ ocp_ai_bm_bridge_master_mac_prefix }}$((i-1))" \
             --network=bridge:{{ ocp_cluster_name }}pr,mac="{{ ocp_ai_prov_bridge_master_mac_prefix }}$((i-1))" \
-            --disk path=/var/lib/libvirt/images/{{ ocp_cluster_name }}_master_$((i-1)).qcow2,size={{ ocp_master_disk }},bus=virtio,format=qcow2 \
+            --disk path=/var/lib/libvirt/images/{{ ocp_cluster_name }}-master-$((i-1)).qcow2,size={{ ocp_master_disk }},bus=virtio,format=qcow2 \
             --graphics vnc \
             --noautoconsole --wait=-1 \
             --boot uefi \
             --events on_reboot=restart \
-            --print-xml > /tmp/{{ ocp_cluster_name }}_master_$((i-1)).xml
+            --print-xml > /tmp/{{ ocp_cluster_name }}-master-$((i-1)).xml
         done
         
         for i in {1..{{ ocp_num_workers }}}; do
             sudo virt-install \
             --virt-type=kvm \
-            --name "{{ ocp_cluster_name }}_worker_$((i-1))" \
+            --name "{{ ocp_cluster_name }}-worker-$((i-1))" \
             --memory {{ ocp_worker_memory }} \
             --vcpus={{ ocp_worker_vcpu }} \
             --os-variant=rhel8.2 \
             --os-type linux \
             --network=bridge:{{ ocp_cluster_name }}bm,mac="{{ ocp_ai_bm_bridge_worker_mac_prefix }}$((i-1))" \
             --network=bridge:{{ ocp_cluster_name }}pr,mac="{{ ocp_ai_prov_bridge_worker_mac_prefix }}$((i-1))" \
-            --disk path=/var/lib/libvirt/images/{{ ocp_cluster_name }}_worker_$((i-1)).qcow2,size={{ ocp_worker_disk }},bus=virtio,format=qcow2 \
+            --disk path=/var/lib/libvirt/images/{{ ocp_cluster_name }}-worker-$((i-1)).qcow2,size={{ ocp_worker_disk }},bus=virtio,format=qcow2 \
             --graphics vnc \
             --noautoconsole --wait=-1 \
             --boot uefi \
             --events on_reboot=restart \
-            --print-xml > /tmp/{{ ocp_cluster_name }}_worker_$((i-1)).xml
+            --print-xml > /tmp/{{ ocp_cluster_name }}-worker-$((i-1)).xml
         done
 
     - name: Create VMs
       shell: |
         for i in {1..{{ ocp_num_masters }}}; do
-          sudo virsh define --file /tmp/{{ ocp_cluster_name }}_master_$((i-1)).xml
+          sudo virsh define --file /tmp/{{ ocp_cluster_name }}-master-$((i-1)).xml
         done
 
         for i in {1..{{ ocp_num_workers }}}; do
-          sudo virsh define --file /tmp/{{ ocp_cluster_name }}_worker_$((i-1)).xml
+          sudo virsh define --file /tmp/{{ ocp_cluster_name }}-worker-$((i-1)).xml
         done
 
 
-### SUSHY-TOOLS
+  ### SUSHY-TOOLS
 
   - name: Install sushy-tools
     block:
@@ -343,7 +333,7 @@
         state: restarted
         enabled: yes
 
-### HTTP STORE
+  ### HTTP STORE
 
   - name: Create an HTTP server container to hold ISOs/QCOW2s
     block:
@@ -378,7 +368,7 @@
           - "{{ ocp_ai_http_store_dir | default('/opt/http_store/data', true) }}:/var/www/html:z"
     
 
-### ASSISTED INSTALLER SERVICE SCRIPT
+  ### ASSISTED INSTALLER SERVICE SCRIPT
 
   - name: Prepare assisted installer service
     block:
@@ -426,11 +416,11 @@
         aicli -U http://{{ ocp_ai_bm_ip }}:{{ ocp_ai_service_port | default('8090', true) }} list cluster
       register: assisted_service_ready
       until: '"Dns Domain" in assisted_service_ready.stdout'
-      retries: 24
+      retries: 36
       delay: 5
 
 
-### ASSISTED INSTALLER EXECUTION PLAYBOOKS
+  ### ASSISTED INSTALLER EXECUTION PLAYBOOKS
 
   - name: Download and configure assisted installer playbooks
     block:
@@ -449,7 +439,7 @@
       - name: Create schedulable-master manifest
         template:
           src: ai/cluster_mgnt_roles/50-master-scheduler.yml.j2
-          dest: "{{ base_path }}/cluster_mgnt_roles/create_cluster/templates/50-master-scheduler.yml"
+          dest: "{{ base_path }}/cluster_mgnt_roles/create_cluster/templates/50-master-scheduler.yml.j2"
           mode: '0664'
         
       - name: Inject schedulable-master manifest
@@ -464,7 +454,7 @@
       - name: Create ingress controller manifest
         template:
           src: ai/cluster_mgnt_roles/60-ingress-controller.yml.j2
-          dest: "{{ base_path }}/cluster_mgnt_roles/create_cluster/templates/60-ingress-controller.yml"
+          dest: "{{ base_path }}/cluster_mgnt_roles/create_cluster/templates/60-ingress-controller.yml.j2"
           mode: '0664'
         
       - name: Inject ingress controller manifest

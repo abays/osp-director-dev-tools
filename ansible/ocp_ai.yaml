@@ -1,35 +1,7 @@
 ---
-### DOWNLOAD AND USE/TEST AI CLI
-
-- hosts: localhost
-  gather_facts: false
-  vars_files: vars/default.yaml
-  roles:
-  - oc_local
-  tasks:
-  - name: Include AI variables
-    include_vars: vars/ocp_ai.yaml
-
-  - name: Test AI service connectivity and clean old cluster
-    block:
-    - name: Delete existing AI cluster (if any)
-      command: "aicli -U http://{{ ocp_ai_bm_ip }}:{{ ocp_ai_service_port | default('8090', true) }} delete cluster {{ ocp_cluster_name }}"
-      register: aicli_delete_cluster
-      failed_when: aicli_delete_cluster.stderr != "" and ("Cluster " + ocp_cluster_name + " not found") not in aicli_delete_cluster.stderr
-    rescue:
-    - name: Report problems with assisted installer service endpoint
-      fail:
-        msg: |
-          Unable to connect to the assisted installer service endpoint at http://{{ ocp_ai_bm_ip }}:{{ ocp_ai_service_port | default('8090', true) }}.  If 
-          you are running osp-director-dev-tools from a remote machine, make sure you have proper connectivity to your provisioning host target.  For 
-          instance, use "sshuttle" to establish a connection: sshuttle --dns -r {{ ansible_user }}@{{ ansible_host}} {{ ocp_ai_bm_bridge_cidr }}
-
-
-### EXECUTE ASSISTED INSTALLER PLAYBOOK
-
 - hosts: convergence_base
-  gather_facts: false
   become: true
+  gather_facts: false
 
   tasks:
   - name: Include default variables
@@ -37,6 +9,12 @@
 
   - name: Include AI variables
     include_vars: vars/ocp_ai.yaml
+
+
+### EXECUTE ASSISTED INSTALLER PLAYBOOK
+
+  - name: Delete existing AI cluster (if any)
+    command: "aicli -U http://{{ ocp_ai_bm_ip }}:{{ ocp_ai_service_port | default('8090', true) }} delete cluster {{ ocp_cluster_name }}"
 
   - name: Run the assisted installer playbook
     shell: ansible-playbook -i inventory.ospd deploy_cluster.yml

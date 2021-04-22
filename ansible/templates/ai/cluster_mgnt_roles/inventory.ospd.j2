@@ -39,14 +39,13 @@ ssh_public_key="{{ lookup('file', '/root/.ssh/id_rsa.pub') }}"
 
 # Load pull-secret file
 {% if secrets_repo is undefined %}
-pull_secret="{{ lookup('file', base_path + '/pull-secret') }}"
+pull_secret={{ lookup('file', base_path + '/pull-secret') }}
 {% else %}
-pull_secret="{{ lookup('file', secrets_repo_path + '/pull-secret') }}"
+pull_secret={{ lookup('file', secrets_repo_path + '/pull-secret') }}
 {% endif %}
 
 # Load cluster file, this is generated automatically
-# TODO: Randomize?
-cluster_id="b4220c76-7878-4336-93a2-671598054696"
+cluster_id="{{ '{{' }} lookup('file', './cluster.txt') {{ '}}' }}"
 
 # Version of the openshift-installer, undefined or empty results in the playbook failing.
 openshift_version="{{ ocp_version }}"
@@ -77,7 +76,7 @@ bastion ansible_ssh_user=root ansible_ssh_host={{ ocp_ai_bm_ip }}
 # Master nodes
 [masters]
 {% for i in range(0, ocp_num_masters) %}
-master{{ i }} bmc_address={{ ocp_ai_bm_ip }}:{{ ocp_ai_sushy_port | default('8082', true) }} mac={{ ocp_ai_bm_bridge_master_mac_prefix }}{{ i }} ip={{ ocp_ai_bm_cidr_prefix }}.1{{ i }}
+{{ ocp_cluster_name }}-master-{{ i }} bmc_address={{ ocp_ai_bm_ip }}:{{ ocp_ai_sushy_port | default('8082', true) }} mac={{ ocp_ai_bm_bridge_master_mac_prefix }}{{ i }} ip={{ ocp_ai_bm_cidr_prefix }}.1{{ i }}
 {% endfor %}
 
 [masters:vars]
@@ -92,7 +91,7 @@ dns={{ ocp_ai_bm_ip }}
 # Worker nodes
 [workers]
 {% for i in range(0, ocp_num_workers) %}
-worker{{ i }} bmc_address={{ ocp_ai_bm_ip }}:{{ ocp_ai_sushy_port | default('8082', true) }} mac={{ ocp_ai_bm_bridge_worker_mac_prefix }}{{ i }} ip={{ ocp_ai_bm_cidr_prefix }}.2{{ i }}
+{{ ocp_cluster_name }}-worker-{{ i }} bmc_address={{ ocp_ai_bm_ip }}:{{ ocp_ai_sushy_port | default('8082', true) }} mac={{ ocp_ai_bm_bridge_worker_mac_prefix }}{{ i }} ip={{ ocp_ai_bm_cidr_prefix }}.2{{ i }}
 {% endfor %}
 
 [workers:vars]
