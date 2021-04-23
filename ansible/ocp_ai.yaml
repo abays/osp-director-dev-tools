@@ -11,12 +11,78 @@
     include_vars: vars/ocp_ai.yaml
 
 
-### EXECUTE ASSISTED INSTALLER PLAYBOOK
+# ### EXECUTE ASSISTED INSTALLER PLAYBOOK
 
   - name: Delete existing AI cluster (if any)
     command: "aicli -U http://{{ ocp_ai_bm_ip }}:{{ ocp_ai_service_port | default('8090', true) }} delete cluster {{ ocp_cluster_name }}"
 
+  - name: Create assisted installer execution bash script
+    template:
+      src: ai/cluster_mgnt_roles/run_playbook.sh.j2
+      dest: "{{ base_path }}/cluster_mgnt_roles/run_playbook.sh"
+      mode: '0755'
+
+  - debug:
+      msg: |
+        Executing the assisted installer playbook. You can tail the logs at {{ base_path }}/ai.log on
+        the host for progress.
+
   - name: Run the assisted installer playbook
-    shell: ansible-playbook -i inventory.ospd deploy_cluster.yml
+    shell: ./run_playbook.sh
     args:
       chdir: "{{ base_path }}/cluster_mgnt_roles"
+
+  - name: Download assisted installer cluster kubeconfig
+    shell: "aicli -U http://{{ ocp_ai_bm_ip }}:{{ ocp_ai_service_port | default('8090', true) }} download kubeconfig {{ ocp_cluster_name }}"
+    args:
+      chdir: "{{ base_path }}/cluster_mgnt_roles"
+
+
+- hosts: localhost
+  vars_files: vars/default.yaml
+  roles:
+  - oc_local
+
+  tasks:
+  - name: Include AI variables
+    include_vars: vars/ocp_ai.yaml
+
+  ### PROVISIONING NETWORK
+
+  - name: Set directory for storing AI Metal3 yaml files
+    set_fact:
+      ai_metal3_yaml_dir: "{{ working_yamls_dir }}/ai_metal3"
+
+  - name: Create local yamldir for local_storage operator
+    file:
+      path: "{{ ai_metal3_yaml_dir }}"
+      state: directory
+      mode: '0755'
+      owner: root
+      group: root
+
+  - name: Create Metal3 provisioning CR
+    template:
+      src: ai/metal3/provisioning.yml.j2
+      dest: "{{ ai_metal3_yaml_dir }}/provisioning.yml"
+      mode: '0664'
+
+  - name: Apply Metal3 provisioning CR
+    shell: "oc apply -f {{ ai_metal3_yaml_dir }}/provisioning.yml"
+    environment: &oc_env
+      PATH: "{{ oc_env_path }}"
+      KUBECONFIG: "{{ base_path }}/cluster_mgnt_roles/kubeconfig.{{ ocp_cluster_name }}"
+
+  - name: Wait for Metal3 pods to restart
+    shell: oc wait pod --for condition=ready -n openshift-machine-api -l k8s-app=metal3 --timeout={{ default_timeout }}s
+    environment:
+      <<: *oc_env
+
+  
+  ### EXTRA WORKERS
+
+  - name: Create Metal3 extra baremetal hosts CRs
+    template:
+      src: ai/metal3/extra_workers_bmhs.yml.j2
+      dest: "{{ ai_metal3_yaml_dir }}/extra_workers_bmhs.yml"
+      mode: '0664'

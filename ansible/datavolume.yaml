@@ -37,7 +37,7 @@
 
   - name: Deploy the datavolume
     shell: |
-      virtctl image-upload dv openstack-base-img -n {{ namespace }} --size={{ osp_controller_disk_size }}G --image-path={{ base_path }}/ironic/html/images/{{ osp_controller_base_image_url | basename }}
+      virtctl image-upload dv openstack-base-img -n {{ namespace }} --size={{ osp_controller_disk_size }}G --image-path={{ base_path }}/ironic/html/images/{{ osp_controller_base_image_url | basename }} --insecure
     environment:
       <<: *oc_env
     when: datavolume_switch.rc == 1

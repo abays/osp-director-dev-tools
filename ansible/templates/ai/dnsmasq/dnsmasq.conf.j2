@@ -16,6 +16,7 @@ no-dhcp-interface={{ ocp_ai_ext_intf.stdout }}
 interface={{ ocp_cluster_name }}bm
 # include cni-podman0 interface that connects to assisted-installer container for DNS requests to succeed
 interface=cni-podman0
+bind-interfaces
 
 #### DHCP (dnsmasq --help dhcp)
 dhcp-range={{ ocp_ai_bm_bridge_dhcp_range }},24h
@@ -52,7 +53,7 @@ address=/master-{{ i }}.{{ ocp_ai_full_cluster_name }}/{{ ocp_ai_bm_cidr_prefix 
 ptr-record=1{{ i }}.{{ ocp_ai_bm_cidr_rev_suffix }},master-{{ i }}.{{ ocp_ai_full_cluster_name }}
 {% endfor %}
 
-{% for i in range(0, ocp_num_workers) %}
+{% for i in range(0, ocp_num_workers + ocp_num_extra_workers) %}
 # Worker-{{ i }}
 dhcp-host={{ ocp_ai_bm_bridge_worker_mac_prefix }}{{ i }},{{ ocp_ai_bm_cidr_prefix }}.2{{ i }},worker-{{ i }}.{{ ocp_ai_full_cluster_name }}
 address=/worker-{{ i }}.{{ ocp_ai_full_cluster_name }}/{{ ocp_ai_bm_cidr_prefix }}.2{{ i }}

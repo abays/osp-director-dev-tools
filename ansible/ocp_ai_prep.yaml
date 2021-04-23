@@ -266,7 +266,7 @@
             --print-xml > /tmp/{{ ocp_cluster_name }}-master-$((i-1)).xml
         done
         
-        for i in {1..{{ ocp_num_workers }}}; do
+        for i in {1..{{ ocp_num_workers + ocp_num_extra_workers }}}; do
             sudo virt-install \
             --virt-type=kvm \
             --name "{{ ocp_cluster_name }}-worker-$((i-1))" \
@@ -290,7 +290,7 @@
           sudo virsh define --file /tmp/{{ ocp_cluster_name }}-master-$((i-1)).xml
         done
 
-        for i in {1..{{ ocp_num_workers }}}; do
+        for i in {1..{{ ocp_num_workers + ocp_num_extra_workers }}}; do
           sudo virsh define --file /tmp/{{ ocp_cluster_name }}-worker-$((i-1)).xml
         done
 

@@ -108,6 +108,7 @@
           # Required for assisted installer
           - dnsmasq
           - libvirt-devel
+          - python3-pip
           - virt-install
 
     - name: Enable helpful services
