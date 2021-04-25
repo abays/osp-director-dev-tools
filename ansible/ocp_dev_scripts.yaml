@@ -7,12 +7,12 @@
   - name: Include variables
     include_vars: vars/default.yaml
 
-  - name: cleanup previous dev-script deployment
-    shell: |
-      export PS4='+(${BASH_SOURCE}:${LINENO}): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
-      make clean
-    args:
-      chdir: "{{ base_path }}/dev-scripts"
+  # - name: cleanup previous dev-script deployment
+  #   shell: |
+  #     export PS4='+(${BASH_SOURCE}:${LINENO}): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
+  #     make clean
+  #   args:
+  #     chdir: "{{ base_path }}/dev-scripts"
 
   - debug:
       msg: |

@@ -294,6 +294,47 @@
           sudo virsh define --file /tmp/{{ ocp_cluster_name }}-worker-$((i-1)).xml
         done
 
+    - name: Get worker domain names
+      shell: "virsh list --all | grep {{ ocp_cluster_name }}-worker- | awk {'print $2'}"
+      register: worker_list
+
+    - name: Print extra worker domain UUIDs
+      shell: virsh dumpxml {{ item }} | grep uuid | cut -d '>' -f 2 | cut -d '<' -f 1
+      when: index >= {{ ocp_num_workers }}
+      loop: "{{ worker_list.stdout_lines }}"
+      loop_control:
+        index_var: index
+      register: extra_worker_uuids
+
+    - name: Create Metal3 extra baremetal hosts CRs
+      block:
+      - name: Include oc_local role
+        include_role:
+          name: oc_local
+
+      - name: Include default variables
+        include_vars: vars/default.yaml
+
+      - name: Set directory for storing AI Metal3 yaml files
+        set_fact:
+          ai_metal3_yaml_dir: "{{ working_yamls_dir }}/ai_metal3"
+
+      - name: Create local yamldir for local_storage operator
+        file:
+          path: "{{ ai_metal3_yaml_dir }}"
+          state: directory
+          mode: '0755'
+          owner: root
+          group: root
+
+      - name: Render Metal3 extra baremetal hosts CRs
+        template:
+          src: ai/metal3/extra_workers_bmhs.yml.j2
+          dest: "{{ ai_metal3_yaml_dir }}/extra_workers_bmhs.yml"
+          mode: '0664'
+
+      delegate_to: localhost
+
 
   ### SUSHY-TOOLS
 
@@ -349,11 +390,10 @@
         image: registry.centos.org/centos/httpd-24-centos7:latest
         state: stopped
 
-    - name: Download RHCOS discovery ISO
+    - name: Download RHEL QCOW2
       get_url:
-        # FIXME: Hard-coded to OCP 4.7 discovery ISO image for now
-        url:  "https://mirror.openshift.com/pub/openshift-v4/dependencies/rhcos/4.7/4.7.0/rhcos-live.x86_64.iso"
-        dest: "{{ ocp_ai_http_store_dir | default('/opt/http_store/data', true) }}/discovery_image_{{ ocp_cluster_name }}.iso"
+        url:  "{{ osp_controller_base_image_url }}"
+        dest: "{{ ocp_ai_http_store_dir | default('/opt/http_store/data', true) }}/{{ osp_controller_base_image_url | basename }}"
         mode: '0644'
         setype: httpd_sys_content_t
 
@@ -377,7 +417,7 @@
         repo: "{{ ocp_ai_service_repo | default('https://github.com/sonofspike/assisted-service-onprem.git', true) }}"
         dest: "{{ base_path }}/assisted-service-onprem"
         force: yes
-        version: "{{ ocp_ai_service_branch | default('HEAD', true) }}"
+        version: "{{ ocp_ai_service_branch | default('a55b218e3176ed920200c1283256337db94ae4b6', true) }}"
 
     - name: Create assisted installer service storage directory
       file:
@@ -432,7 +472,7 @@
         repo: "{{ ocp_ai_ansible_repo | default('https://github.com/sonofspike/cluster_mgnt_roles.git', true) }}"
         dest: "{{ base_path }}/cluster_mgnt_roles"
         force: true
-        version: "{{ ocp_ai_ansible_branch | default('HEAD', true) }}"
+        version: "{{ ocp_ai_ansible_branch | default('ccb34826a671f6c3435869303b6abb538638252b', true) }}"
 
     - name: Add schedulable-master manifest
       block:

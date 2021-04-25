@@ -32,18 +32,16 @@
       KUBECONFIG: "{{ kubeconfig }}"
     when: ocp_ai|bool == False
 
-  - name: Assisted installer prepared extra_hosts
-    block:
-    - name: Include AI variables
-      include_vars: vars/ocp_ai.yaml
-    
-    - name: Register assisted installer prepared extra_hosts
-      shell: |
-        set -e
-        oc apply -f {{ working_yamls_dir }}/ai_metal3/extra_workers_bmhs.yml
-      environment:
-        PATH: "{{ oc_env_path }}"
-        KUBECONFIG: "{{ kubeconfig }}"
+  - name: Include AI variables
+    include_vars: vars/ocp_ai.yaml
+  
+  - name: Register assisted installer prepared extra_hosts
+    shell: |
+      set -e
+      oc apply -f {{ working_yamls_dir }}/ai_metal3/extra_workers_bmhs.yml
+    environment:
+      PATH: "{{ oc_env_path }}"
+      KUBECONFIG: "{{ kubeconfig }}"
     when: ocp_ai|bool
 
   - name: Render templates to yaml dir
