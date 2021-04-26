@@ -9,20 +9,14 @@
 
   - name: Include AI variables
     include_vars: vars/ocp_ai.yaml
-
-
-  ### VERIFICATION
-
-  # FIXME: Here to enforce use of 4.7 for now
-  - fail:
-      msg: "OCP version {{ ocp_version }} is not allowed.  Only OCP 4.7 is currently supported for assisted installer deployments."
-    when: ocp_version != 4.7
-
+  
 
   ### ASSISTED INSTALLER CLI BINARY
 
   - name: Install assisted installer CLI
-    command: pip3 install aicli
+    shell: |
+      pip3 install aicli
+      pip3 install --user aicli
 
   ### ADDITIONAL SET-FACTS
 
@@ -188,7 +182,41 @@
         firewall-cmd --direct --permanent --add-rule ipv4 filter FORWARD 0 -i "{{ ocp_cluster_name }}bm" -o "{{ ocp_ai_ext_intf.stdout }}" -j ACCEPT;
         firewall-cmd --direct --permanent --add-rule ipv4 filter FORWARD 0 -i "{{ ocp_ai_ext_intf.stdout }}" -o "{{ ocp_cluster_name }}bm" -m state --state RELATED,ESTABLISHED -j ACCEPT;
         firewall-cmd --reload
-    
+
+  
+  ### HTTP STORE
+
+  - name: Create an HTTP server container to hold ISOs/QCOW2s
+    block:
+    - name: Create HTTP server storage directory
+      file:
+        path: "{{ ocp_ai_http_store_dir | default('/opt/http_store/data', true) }}"
+        state: directory
+        mode: '0755'
+
+    - name: Stop httpd container
+      containers.podman.podman_container:
+        name: httpd
+        image: registry.centos.org/centos/httpd-24-centos7:latest
+        state: stopped
+
+    - name: Download RHEL QCOW2
+      get_url:
+        url:  "{{ osp_controller_base_image_url }}"
+        dest: "{{ ocp_ai_http_store_dir | default('/opt/http_store/data', true) }}/{{ osp_controller_base_image_url | basename }}"
+        mode: '0644'
+        setype: httpd_sys_content_t
+
+    - name: Start httpd container
+      containers.podman.podman_container:
+        name: httpd
+        image: registry.centos.org/centos/httpd-24-centos7:latest
+        state: started
+        ports:
+          - "8080:8080"
+        volumes:
+          - "{{ ocp_ai_http_store_dir | default('/opt/http_store/data', true) }}:/var/www/html:z"
+
 
   ### DNSMASQ
 
@@ -245,6 +273,37 @@
           virsh undefine --nvram $i
           rm -f /var/lib/libvirt/images/$i.qcow2
         done
+
+    # FIXME: Sushy-tools does not allow you to specify the libvirt storage pool, and assumes
+    #        that default exists, so we need to make sure that it does
+    - name: Check if default storage pool exists
+      shell: virsh pool-list | grep default 
+      register: libvirt_default_pool
+      failed_when: libvirt_default_pool.stderr != "" and "no storage pool with matching name" not in libvirt_default_pool.stderr
+
+    - name: Handle default storage pool 
+      block:
+      - name: Render libvirt default storage pool XML
+        template:
+          src: ai/libvirt/storage-pool.xml.j2
+          dest: "/tmp/storage-pool.xml"
+          mode: '0664'
+
+      - name: Remove any storage pools currently using /var/lib/libvirt/images
+        shell: |
+          for i in $(virsh pool-list --all | grep -v "Autostart" | grep -v "\-\-\-\-\-\-\-\-\-" | awk {'print $1'}); do
+            if [[ -n '$(virsh pool-dumpxml $i | grep "/var/lib/libvirt/images")' ]]; then
+              virsh pool-destroy $i
+              virsh pool-undefine $i
+            fi
+          done
+      
+      - name: Create default storage pool
+        shell: |
+          virsh pool-define /tmp/storage-pool.xml
+          virsh pool-autostart default
+          virsh pool-start default
+      when: libvirt_default_pool.stdout == ""
 
     - name: Create AI OCP VM XML definitions
       shell: |
@@ -319,7 +378,7 @@
         set_fact:
           ai_metal3_yaml_dir: "{{ working_yamls_dir }}/ai_metal3"
 
-      - name: Create local yamldir for local_storage operator
+      - name: Create local yamldir for AI Metal3 yaml files
         file:
           path: "{{ ai_metal3_yaml_dir }}"
           state: directory
@@ -373,39 +432,6 @@
         name: sushy-tools
         state: restarted
         enabled: yes
-
-  ### HTTP STORE
-
-  - name: Create an HTTP server container to hold ISOs/QCOW2s
-    block:
-    - name: Create HTTP server storage directory
-      file:
-        path: "{{ ocp_ai_http_store_dir | default('/opt/http_store/data', true) }}"
-        state: directory
-        mode: '0755'
-
-    - name: Stop httpd container
-      containers.podman.podman_container:
-        name: httpd
-        image: registry.centos.org/centos/httpd-24-centos7:latest
-        state: stopped
-
-    - name: Download RHEL QCOW2
-      get_url:
-        url:  "{{ osp_controller_base_image_url }}"
-        dest: "{{ ocp_ai_http_store_dir | default('/opt/http_store/data', true) }}/{{ osp_controller_base_image_url | basename }}"
-        mode: '0644'
-        setype: httpd_sys_content_t
-
-    - name: Start httpd container
-      containers.podman.podman_container:
-        name: httpd
-        image: registry.centos.org/centos/httpd-24-centos7:latest
-        state: started
-        ports:
-          - "8080:8080"
-        volumes:
-          - "{{ ocp_ai_http_store_dir | default('/opt/http_store/data', true) }}:/var/www/html:z"
     
 
   ### ASSISTED INSTALLER SERVICE SCRIPT
@@ -458,11 +484,15 @@
       until: '"Dns Domain" in assisted_service_ready.stdout'
       retries: 36
       delay: 5
+      environment:
+        PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/root/bin
 
 
   ### ASSISTED INSTALLER EXECUTION PLAYBOOKS
 
   - name: Download and configure assisted installer playbooks
+    become: true
+    become_user: ocp
     block:
     - name: Pull secret processing
       include_tasks: pull-secret.yaml

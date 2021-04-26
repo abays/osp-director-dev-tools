@@ -43,6 +43,7 @@ post_install: hosts local-defaults.yaml
 	ANSIBLE_FORCE_COLOR=true ansible-playbook \
 	-i hosts -e @local-defaults.yaml \
 	local_oc_client.yaml \
+	ocp_ai_post_install.yaml \
 	ocp_default_storageclass.yaml \
 	ocp_image_registry.yaml \
 	ocp_vm_setup_extra_nics.yaml
