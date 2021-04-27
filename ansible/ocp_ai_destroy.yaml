@@ -1,0 +1,185 @@
+---
+- hosts: convergence_base
+  become: true
+  gather_facts: false
+
+  tasks:
+  - name: Include default variables
+    include_vars: vars/default.yaml
+
+  - name: Include AI variables
+    include_vars: vars/ocp_ai.yaml
+
+
+  ### FIREWALL
+
+  # - name: Prepare firewall
+  #   block:
+  #   - name: Acquire default external interface
+  #     shell: |
+  #       ip r | grep default | head -1 | cut -d ' ' -f 5 
+  #     register: ocp_ai_ext_intf
+
+  #   - fail: 
+  #       msg: |
+  #         Unable to determine external interface
+  #     when: ocp_ai_ext_intf.stdout == ""
+
+  #   - name: Add BM bridge to libvirt zone
+  #     command: firewall-cmd --zone libvirt --change-interface ostestbm --permanent
+
+  #   - name: Add TCP firewall rules for BM bridge
+  #     firewalld:
+  #       port: "{{ item }}/tcp"
+  #       state: enabled
+  #       zone: libvirt
+  #       permanent: yes
+  #       immediate: yes
+  #     with_items:
+  #       - 8000
+  #       - 8080
+  #       - 8082
+  #       - 8090
+  #       - 8888
+
+  #   - name: Add provisioning bridge to libvirt zone
+  #     command: firewall-cmd --zone libvirt --change-interface ostestpr --permanent
+
+  #   - name: Add TCP firewall rules for provisioning bridge
+  #     firewalld:
+  #       port: "{{ item }}/tcp"
+  #       state: enabled
+  #       zone: libvirt
+  #       permanent: yes
+  #       immediate: yes
+  #     with_items:
+  #       - 80
+  #       - 2049 
+  #       - 5000 
+  #       - 5050
+  #       - 6180
+  #       - 6385
+  #       - 8000 
+  #       - 9999
+
+  #   - name: Add UDP firewall rules for provisioning bridge
+  #     firewalld:
+  #       port: "{{ item }}/udp"
+  #       state: enabled
+  #       zone: libvirt
+  #       permanent: yes
+  #       immediate: yes
+  #     with_items:
+  #       - 53
+  #       - 5353 
+  #       - 546
+  #       - 547
+  #       - 6230-6239
+  #       - 67 
+  #       - 68   
+  #       - 69 
+
+  #   # FIXME: Use firewalld rich-rules instead?
+  #   - name: Add direct firewall rules for BM bridge
+  #     shell: |
+  #       firewall-cmd --direct --permanent --add-rule ipv4 nat POSTROUTING 0 -o "{{ ocp_ai_ext_intf.stdout }}" -j MASQUERADE;
+  #       firewall-cmd --direct --permanent --add-rule ipv4 filter FORWARD 0 -i "{{ ocp_cluster_name }}bm" -o "{{ ocp_ai_ext_intf.stdout }}" -j ACCEPT;
+  #       firewall-cmd --direct --permanent --add-rule ipv4 filter FORWARD 0 -i "{{ ocp_ai_ext_intf.stdout }}" -o "{{ ocp_cluster_name }}bm" -m state --state RELATED,ESTABLISHED -j ACCEPT;
+  #       firewall-cmd --reload
+    
+
+  ### DNSMASQ
+    
+  - name: Remove dnsmasq conf
+    file:
+      path: "/etc/dnsmasq.d/dnsmasq_ai.conf"
+      state: absent
+
+  - name: Remove dnsmasq DNS conf
+    file:
+      path: "/etc/NetworkManager/conf.d/dnsmasq.conf"
+      state: absent
+
+  - name: Restart NetworkManager
+    service:
+      name: NetworkManager
+      state: restarted
+      enabled: yes
+
+  - name: Stop dnsmasq
+    service:
+      name: dnsmasq
+      state: stopped
+
+
+  ### VMs
+
+  - name: Delete VMs and disk QCOW2s
+    shell: |
+      for i in $(virsh list | grep "{{ ocp_cluster_name }}-" | awk {"print $2"}); do
+        virsh destroy $i
+      done
+
+      for i in $(virsh list --all | grep "{{ ocp_cluster_name }}-" | awk {"print $2"}); do
+        virsh undefine --nvram $i
+        rm -f /var/lib/libvirt/images/$i.qcow2
+      done
+
+
+  ### SUSHY-TOOLS
+
+  - name: Stop sushy-tools service
+    service:
+      name: sushy-tools
+      state: stopped
+      enabled: no
+    ignore_errors: true
+
+  - name: Delete sushy-tools service
+    file:
+      path: /etc/systemd/system/sushy-tools.service
+      state: absent
+
+  - name: Reload systemd service
+    systemd:
+      daemon_reexec: yes
+    
+
+  ### HTTP STORE
+
+  - name: Stop and remove httpd container
+    containers.podman.podman_container:
+      name: httpd
+      image: registry.centos.org/centos/httpd-24-centos7:latest
+      state: absent
+    
+
+  ### ASSISTED INSTALLER SERVICE SCRIPT
+
+  - name: Stop and remove assisted installer service container
+    shell: |
+      ./stop-assisted-service.sh
+    args:
+      chdir: "{{ base_path }}/assisted-service-onprem"
+
+
+  ### BRIDGES
+
+  - name: Delete AI bridges
+    block:
+    - name: Delete existing bridges (if any)
+      community.general.nmcli:
+        conn_name: "{{ ocp_cluster_name }}{{ item }}"
+        type: bridge
+        state: absent
+      with_items:
+        - bm
+        - pr
+
+    - name: Make sure bridge ifcfg files are removed
+      file:
+        path: "/etc/sysconfig/network-scripts/ifcfg-{{ ocp_cluster_name }}{{ item }}"
+        state: absent
+      with_items:
+        - bm
+        - pr
