@@ -160,9 +160,18 @@
         environment:
           <<: *oc_env
 
-      - name: Label SRIOV nodes as such, in terms of role
+      - name: Label SRIOV nodes as such, in terms of role, for dev-scripts
         shell: |
           oc label node {{ ((item | replace(ocp_cluster_name+'_','')) | replace('_','-')) }} node-role.kubernetes.io/worker-sriov="" --overwrite=true
         environment:
           <<: *oc_env
         with_items: "{{ virt_sriov_domains }}"
+        when: not (ocp_ai | bool)
+
+      - name: Label SRIOV nodes as such, in terms of role, for dev-scripts
+        shell: |
+          oc label node {{ ((item | replace('_','-')) }} node-role.kubernetes.io/worker-sriov="" --overwrite=true
+        environment:
+          <<: *oc_env
+        with_items: "{{ virt_sriov_domains }}"
+        when: not (ocp_ai | bool)
