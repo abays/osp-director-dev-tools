@@ -35,8 +35,8 @@
 - name: Change machine type in {{ vm_name }} VM XML
   replace:
     path: "{{ xml_dir }}/{{ vm_name }}.xml"
-    regexp: 'pc-q35-rhel8.2.0'
-    replace: 'pc-q35-5.0'
+    regexp: "'pc-q35-rhel8.*'"
+    replace: "'pc-q35-5.0'"
 
 - name: Change emulator location in {{ vm_name }} VM XML
   replace:
