@@ -17,7 +17,7 @@ metadata:
   name: openshift-worker-{{ i }}
   namespace: openshift-machine-api
 spec:
-  online: false
+  online: true
   bootMACAddress: {{ ocp_ai_prov_bridge_worker_mac_prefix }}{{ i }}
   bmc:
     address: redfish+http://{{ ocp_ai_bm_ip }}:{{ ocp_ai_sushy_port | default('8082', true) }}/redfish/v1/Systems/{{ extra_worker_uuids.results[i].stdout }}

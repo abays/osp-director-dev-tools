@@ -91,8 +91,10 @@
 
       - name: Copy other bins and ROMs to shared QEMU directory
         copy:
-          src: /usr/share/qemu-kvm
+          src: /usr/share/qemu-kvm/
           dest: /usr/share/qemu
+          follow: yes
+          local_follow: yes
           mode: 0755
           remote_src: yes
       when: not custom_qemu.stat.exists
@@ -156,22 +158,13 @@
         retries: 100
         delay: 15
         register: nodes_ready
-        until: (nodes_ready.stdout | regex_findall('worker-\\d   Ready') | length) == ocp_num_workers + (virt_sriov_domains | length)
+        until: (nodes_ready.stdout | regex_findall('worker-\\d\s*Ready') | length) == ocp_num_workers + (virt_sriov_domains | length)
         environment:
           <<: *oc_env
 
-      - name: Label SRIOV nodes as such, in terms of role, for dev-scripts
+      - name: Label SRIOV nodes as such, in terms of role
         shell: |
           oc label node {{ ((item | replace(ocp_cluster_name+'_','')) | replace('_','-')) }} node-role.kubernetes.io/worker-sriov="" --overwrite=true
         environment:
           <<: *oc_env
         with_items: "{{ virt_sriov_domains }}"
-        when: not (ocp_ai | bool)
-
-      - name: Label SRIOV nodes as such, in terms of role, for dev-scripts
-        shell: |
-          oc label node {{ ((item | replace('_','-')) }} node-role.kubernetes.io/worker-sriov="" --overwrite=true
-        environment:
-          <<: *oc_env
-        with_items: "{{ virt_sriov_domains }}"
-        when: not (ocp_ai | bool)
