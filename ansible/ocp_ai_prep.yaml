@@ -225,6 +225,18 @@
     become: true
     become_user: root
     block:
+    - name: Calculate API/Ingress VIP for non-SNO
+      set_fact:
+        ocp_api_final_octet: 3
+        ocp_ingress_final_octet: 4
+      when: not (ocp_sno|bool)
+
+    - name: Calculate API/Ingress IP for SNO
+      set_fact:
+        ocp_api_final_octet: 10
+        ocp_ingress_final_octet: 10
+      when: (ocp_sno|bool)
+
     - name: Create dnsmasq conf
       template:
         src: "ai/dnsmasq/dnsmasq.conf.j2"
@@ -575,6 +587,55 @@
         regexp: '^(.+)$'
         replace: '# \1'
 
+    - name: HACK - SNO
+      block:
+      - name: Set HA to None
+        lineinfile:
+          path: "{{ base_path }}/cluster_mgnt_roles/create_cluster/tasks/main.yml"
+          insertafter: 'service_network_cidr'
+          line: '        "high_availability_mode": "None",'
+
+      - name: Remove Ingress VIP from create cluster tasks
+        replace:
+          path: "{{ base_path }}/cluster_mgnt_roles/create_cluster/tasks/main.yml"
+          after: '"service_network_cidr"'
+          before: '"additional_ntp_source"'
+          regexp: '^(.+"ingress_vip".+)$'
+          replace: '# \1'
+
+      - name: Replace host-role-setting with machine-cidr-setting in install cluster tasks
+        replace:
+          path: "{{ base_path }}/cluster_mgnt_roles/install_cluster/tasks/hosts_discovery.yml"
+          after: 'method: PATCH'
+          before: 'register: http_reply'
+          regexp: '^(.+"hosts_roles".+)$'
+          replace: '        "machine_network_cidr": "{{ ''{{'' }} machine_network_cidr {{ ''}}'' }}"'
+
+      - name: Remove Ingress VIP from install cluster tasks, part 1
+        replace:
+          path: "{{ base_path }}/cluster_mgnt_roles/install_cluster/tasks/main.yml"
+          after: 'Patch cluster with API Virtual IP'
+          before: 'ingress_vip":'
+          regexp: '^(.+"vip_dhcp_allocation".+)$'
+          replace: '        "vip_dhcp_allocation":  "{{ ''{{'' }} VIP_DHCP_ALLOCATION | lower | bool {{ ''}}'' }}"'
+
+      - name: Remove Ingress VIP from install cluster tasks, part 2
+        replace:
+          path: "{{ base_path }}/cluster_mgnt_roles/install_cluster/tasks/main.yml"
+          after: 'vip_dhcp_allocation":'
+          before: 'api_vip":'
+          regexp: '^(.+"ingress_vip".+)$'
+          replace: '# \1'
+
+      - name: Remove API VIP from install cluster tasks
+        replace:
+          path: "{{ base_path }}/cluster_mgnt_roles/install_cluster/tasks/main.yml"
+          after: 'ingress_vip":'
+          before: 'when: install'
+          regexp: '^(.+"api_vip".+)$'
+          replace: '# \1'
+      when: (ocp_sno|bool)
+
     - name: Add schedulable-master manifest
       block:
       - name: Create schedulable-master manifest
@@ -592,6 +653,11 @@
 
     - name: Add ingress controller manifest
       block:
+      - name: Set ingress controller replicas variable for SNO, if necessary
+        set_fact:
+          ocp_ai_ingress_replicas: 1
+        when: (ocp_sno|bool)
+
       - name: Create ingress controller manifest
         template:
           src: ai/cluster_mgnt_roles/60-ingress-controller.yml.j2

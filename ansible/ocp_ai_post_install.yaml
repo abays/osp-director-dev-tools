@@ -67,6 +67,10 @@
         oc apply -f {{ ai_metal3_yaml_dir }}/provisioning.yml
       environment:
         <<: *oc_env
+      register: metal3_provision_apply
+      until: metal3_provision_apply is not failed
+      retries: "{{ (default_timeout / 5)|int }}"
+      delay: 5
 
     - name: Pause for 15 seconds to allow Metal3 to begin reconciliation
       pause:

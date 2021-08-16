@@ -47,6 +47,8 @@ ocp_worker_memory: 30000
 ocp_worker_vcpu: 8
 ocp_worker_disk: 50
 
+ocp_sno: "{{ (ocp_num_masters + ocp_num_workers) == 1 }}"
+
 # OCP cluster name
 ocp_cluster_name: ostest
 #ocp_domain_name: defaults to test.metalkube.org
