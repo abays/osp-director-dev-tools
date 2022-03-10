@@ -8,5 +8,5 @@ spec:
   provisioningDHCPRange: 172.22.0.10,172.22.0.254
   provisioningIP: 172.22.0.3
   provisioningInterface: enp1s0
-  provisioningNetwork: Managed
+  provisioningNetwork: {{ 'Managed' if ocp_version != '4.10' else 'Disabled' }}
   provisioningNetworkCIDR: 172.22.0.0/24

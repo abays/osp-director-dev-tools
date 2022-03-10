@@ -1,80 +1,80 @@
----
-- hosts: convergence_base
-  gather_facts: false
-  tasks:
-  - name: Include default variables
-    include_vars: vars/default.yaml
+# ---
+# - hosts: convergence_base
+#   gather_facts: false
+#   tasks:
+#   - name: Include default variables
+#     include_vars: vars/default.yaml
 
-  - name: Include AI variables
-    include_vars: vars/ocp_ai.yaml
+#   - name: Include AI variables
+#     include_vars: vars/ocp_ai.yaml
 
 
-  ### EXECUTE ASSISTED INSTALLER PLAYBOOK
+#   ### EXECUTE ASSISTED INSTALLER PLAYBOOK
 
-  - name: Run Assisted Installer
-    become: true
-    become_user: ocp
-    block:
-    - name: Delete existing AI cluster (if any)
-      shell: |
-        CLUSTER=$(aicli -U http://192.168.111.1:{{ ocp_ai_service_port | default('8090', true) }} list cluster | grep {{ ocp_cluster_name }})
-        while [[ "$CLUSTER" != "" ]];
-        do
-          aicli -U http://192.168.111.1:{{ ocp_ai_service_port | default('8090', true) }} delete cluster $(echo "$CLUSTER" | head -1 | awk '{print $4}')
-          CLUSTER=$(aicli -U http://192.168.111.1:{{ ocp_ai_service_port | default('8090', true) }} list cluster | grep {{ ocp_cluster_name }})
-        done
-      environment:
-        PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/root/bin
-      register: delete_ai_cluster
-      failed_when: delete_ai_cluster.stderr != "" and "Cluster {{ ocp_cluster_name }} not found" not in delete_ai_cluster.stderr
+#   - name: Run Assisted Installer
+#     become: true
+#     become_user: ocp
+#     block:
+#     - name: Delete existing AI cluster (if any)
+#       shell: |
+#         CLUSTER=$(aicli -U http://192.168.111.1:{{ ocp_ai_service_port | default('8090', true) }} list cluster | grep {{ ocp_cluster_name }})
+#         while [[ "$CLUSTER" != "" ]];
+#         do
+#           aicli -U http://192.168.111.1:{{ ocp_ai_service_port | default('8090', true) }} delete cluster $(echo "$CLUSTER" | head -1 | awk '{print $4}')
+#           CLUSTER=$(aicli -U http://192.168.111.1:{{ ocp_ai_service_port | default('8090', true) }} list cluster | grep {{ ocp_cluster_name }})
+#         done
+#       environment:
+#         PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/root/bin
+#       register: delete_ai_cluster
+#       failed_when: delete_ai_cluster.stderr != "" and "Cluster {{ ocp_cluster_name }} not found" not in delete_ai_cluster.stderr
 
-    - name: show installer info
-      debug:
-        msg: |
-          Executing the assisted installer playbook.  You can tail the logs at {{ base_path }}/ai.log on
-          the host for progress.  Furthermore, you can view the assisted installer console by entering the
-          URL http://192.168.111.1:8080/clusters/.  If you do not have direct access to that IP from
-          your browser, you can use a tool like "sshuttle" to provide connectivity like so:
-          sshuttle --dns -r <user>@<cluster host> 192.168.111.0/24.  You would then hit this
-          URL in your browser: http://<cluster host>:8080/clusters/
+#     - name: show installer info
+#       debug:
+#         msg: |
+#           Executing the assisted installer playbook.  You can tail the logs at {{ base_path }}/ai.log on
+#           the host for progress.  Furthermore, you can view the assisted installer console by entering the
+#           URL http://192.168.111.1:8080/clusters/.  If you do not have direct access to that IP from
+#           your browser, you can use a tool like "sshuttle" to provide connectivity like so:
+#           sshuttle --dns -r <user>@<cluster host> 192.168.111.0/24.  You would then hit this
+#           URL in your browser: http://<cluster host>:8080/clusters/
 
-    - name: Run the assisted installer playbook
-      shell: |
-        ./deploy_cluster.sh
-      args:
-        chdir: "{{ base_path }}/crucible"
-      environment:
-        ANSIBLE_HOST_KEY_CHECKING: false
+#     - name: Run the assisted installer playbook
+#       shell: |
+#         ./deploy_cluster.sh
+#       args:
+#         chdir: "{{ base_path }}/crucible"
+#       environment:
+#         ANSIBLE_HOST_KEY_CHECKING: false
 
-    - name: Download assisted installer cluster kubeconfig and kubeadmin password
-      shell: |
-        aicli -U http://192.168.111.1:{{ ocp_ai_service_port | default('8090', true) }} download kubeconfig {{ ocp_cluster_name }}
-        aicli -U http://192.168.111.1:{{ ocp_ai_service_port | default('8090', true) }} download kubeadmin-password {{ ocp_cluster_name }}
-      args:
-        chdir: "{{ base_path }}/crucible"
-      environment:
-        PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/root/bin
+#     - name: Download assisted installer cluster kubeconfig and kubeadmin password
+#       shell: |
+#         aicli -U http://192.168.111.1:{{ ocp_ai_service_port | default('8090', true) }} download kubeconfig {{ ocp_cluster_name }}
+#         aicli -U http://192.168.111.1:{{ ocp_ai_service_port | default('8090', true) }} download kubeadmin-password {{ ocp_cluster_name }}
+#       args:
+#         chdir: "{{ base_path }}/crucible"
+#       environment:
+#         PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/root/bin
 
-    - name: Set kubeconfig fact
-      set_fact:
-        ai_kubeconfig: lookup('file', '{{ base_path }}/crucible/kubeconfig.{{ ocp_cluster_name }}')
+#     - name: Set kubeconfig fact
+#       set_fact:
+#         ai_kubeconfig: lookup('file', '{{ base_path }}/crucible/kubeconfig.{{ ocp_cluster_name }}')
 
-  - name: Create assisted installer kubeconfig locally
-    block:
-    - name: Include oc_local role
-      include_role:
-        name: oc_local
+#   - name: Create assisted installer kubeconfig locally
+#     block:
+#     - name: Include oc_local role
+#       include_role:
+#         name: oc_local
 
-    - name: Include default variables
-      include_vars: vars/default.yaml
+#     - name: Include default variables
+#       include_vars: vars/default.yaml
 
-    - name: Render kubeconfig
-      template:
-        src: ai/crucible/kubeconfig.j2
-        dest: "{{ working_dir }}/kubeconfig"
-        mode: '0664'
+#     - name: Render kubeconfig
+#       template:
+#         src: ai/crucible/kubeconfig.j2
+#         dest: "{{ working_dir }}/kubeconfig"
+#         mode: '0664'
 
-    delegate_to: localhost
+#     delegate_to: localhost
 
 
 - hosts: localhost
@@ -87,7 +87,7 @@
   tasks:
   - name: Get the ocp client tar gunzip file
     get_url:
-      url: "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest-{{ ocp_version }}/openshift-client-linux.tar.gz"
+      url: "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/{{ 'latest-'+ocp_version if ocp_version != '4.10' else 'candidate-'+ocp_version }}/openshift-client-linux.tar.gz"
       dest: "/tmp/openshift-client-linux.tar.gz"
       mode: '0755'
       timeout: 30

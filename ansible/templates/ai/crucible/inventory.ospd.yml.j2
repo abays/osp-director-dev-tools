@@ -13,11 +13,12 @@ all:
     base_dns_domain: {{ ocp_domain_name }}
 
     # OpenShift version
+    # FIXME: Currently only honors "ocp_version", while "ocp_minor_version" is ignored
     openshift_full_version: {{ ocp_version }}.{{ ocp_minor_version }}
 
     # Virtual IP addresses used to access the resulting OpenShift cluster
-    api_vip: {{ ocp_ai_bm_cidr_prefix }}.3 # the IP address to be used for api.clustername.example.lab and api-int.clustername.example.lab
-    ingress_vip: {{ ocp_ai_bm_cidr_prefix }}.4 # the IP address to be used for *.apps.clustername.example.lab
+    api_vip: {{ ocp_ai_bm_cidr_prefix }}.{{ ocp_ai_bm_api_ip_octet }} # the IP address to be used for api.clustername.example.lab and api-int.clustername.example.lab
+    ingress_vip: {{ ocp_ai_bm_cidr_prefix }}.{{ ocp_ai_bm_ingress_ip_octet }} # the IP address to be used for *.apps.clustername.example.lab
 
     ## Allocate virtual IPs via DHCP server. Equivalent to the vip_dhcp_allocation configuration option of Assisted Installer
     vip_dhcp_allocation: false
@@ -36,6 +37,20 @@ all:
     # # The default is OpenShift SDN unless otherwise specified.
     # network_type: OVNKubernetes
     # network_type: OpenShiftSDN
+
+    supported_ocp_versions:
+      - 4.6.16
+      - 4.7.33
+      - 4.8.14
+      - 4.9.0
+      - 4.10.3
+
+    ocp_release_versions_map_all:
+      '4.6': 4.6.16
+      '4.7': 4.7.33
+      '4.8': 4.8.14
+      '4.9': 4.9.0
+      '4.10': 4.10.3
 
     ######################################
     # Prerequisite Service Configuration #

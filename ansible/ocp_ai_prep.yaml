@@ -42,6 +42,18 @@
     set_fact:
       ocp_ai_bm_cidr_rev_suffix: "111.168.192"
 
+  - name: Set API/ingress facts for non-SNO
+    set_fact:
+      ocp_ai_bm_api_ip_octet: 3
+      ocp_ai_bm_ingress_ip_octet: 4
+    when: ocp_num_masters > 1
+
+  - name: Set API/ingress facts for SNO
+    set_fact:
+      ocp_ai_bm_api_ip_octet: 10
+      ocp_ai_bm_ingress_ip_octet: 10
+    when: ocp_num_masters == 1
+
 
   ### BRIDGES
   - name: Prepare bridges
@@ -576,6 +588,76 @@
         path: "{{ base_path }}/crucible/roles/validate_inventory/tasks/network.yml"
         regexp: '\(setup_ntp_service\s\|\sdefault\(True\)\)\s!=\sTrue'
         replace: 'false'
+
+    - name: SNO modifications
+      when: ocp_num_masters == 1
+      block:
+      - name: Add workaround for host name for SNO
+        blockinfile:
+          path: "{{ base_path }}/crucible/roles/patch_host_config/tasks/main.yml"
+          insertbefore: "- name: Set the installation disk path"
+          block: |
+            - name: "Set host name for {{ '{{' }} host_name {{ '}}' }}"
+              uri:
+                url: "{{ '{{' }} URL_ASSISTED_INSTALLER_CLUSTER {{ '}}' }}"
+                method: PATCH
+                url_username: "{{ '{{' }} HTTP_AUTH_USERNAME {{ '}}' }}"
+                url_password: "{{ '{{' }} HTTP_AUTH_PASSWORD {{ '}}' }}"
+                body_format: json
+                status_code: [201]
+                return_content: True
+                body: {
+                    "hosts_names": [ "{{ '{{' }} host {{ '}}' }}" ],
+                }
+              # Role can't be changed for SNO hosts
+              when: single_node_openshift_enabled
+              register: http_reply
+
+      - name: Force support for OCP 4.10
+        blockinfile:
+          path: "{{ base_path }}/crucible/roles/setup_assisted_installer/defaults/main.yml"
+          insertbefore: '"4.6":'
+          block: |2
+              "4.10":
+                display_name: 4.10.3
+                release_image: quay.io/openshift-release-dev/ocp-release:4.10.3-x86_64
+                release_version: 4.10.3
+                rhcos_image: https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/4.10/4.10.3/rhcos-live.x86_64.iso
+                rhcos_rootfs: https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/4.10/4.10.3/rhcos-live-rootfs.x86_64.img
+                rhcos_version: 410.84.202201251210-0
+                support_level: production
+
+
+      # - name: Copy install-config patch to Crucible
+      #   copy:
+      #     dest: "{{ base_path }}/crucible/roles/create_cluster/templates/patch-install-config-bm.j2"
+      #     content: |
+      #       platform:
+      #         baremetal:
+      #           provisioningNetwork: Disabled
+      #           apiVIP: ""
+      #           ingressVIP: ""
+      #           hosts: []
+      #     force: yes
+      #     mode: '0644'
+
+      # - name: Add Crucible create_cluster task to process baremetal install config patch
+      #   blockinfile:
+      #     path: "{{ base_path }}/crucible/roles/create_cluster/tasks/main.yml"
+      #     insertafter: "when: patch_install_config is defined"
+      #     block: |
+      #       - name: Load patch for baremetal install config
+      #         set_fact:
+      #           patch_install_config_bm: "{{ '{{' }} lookup('template', 'patch-install-config-bm.j2') | from_yaml {{ '}}' }}"
+
+      #       - name: Patch install config to force baremetal
+      #         uri:
+      #           url: "{{ '{{' }} URL_ASSISTED_INSTALLER_CLUSTERS {{ '}}' }}/{{ '{{' }} cluster_id {{ '}}' }}/install-config"
+      #           method: PATCH
+      #           status_code: [201]
+      #           return_content: True
+      #           body_format: json
+      #           body: "{{ '{{' }} patch_install_config_bm | to_json(ensure_ascii=False) | string | to_json(ensure_ascii=False) | string {{ '}}' }}"            
 
     # Needed until https://github.com/redhat-partner-solutions/crucible/issues/96 is fixed
     - name: Fix "generate SSH keys" check
