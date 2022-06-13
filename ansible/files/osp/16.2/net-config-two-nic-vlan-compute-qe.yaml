@@ -172,7 +172,7 @@ resources:
               network_config:
               # BMH provisioning interface used for ctlplane
               - type: interface
-                name: ens1f1
+                name: ens1f2
                 mtu:
                   get_param: ControlPlaneMtu
                 use_dhcp: false
@@ -204,7 +204,7 @@ resources:
                 use_dhcp: false
                 members:
                 - type: interface
-                  name: ens1f2
+                  name: ens1f1
                   mtu:
                     get_attr: [MinViableMtu, value]
                   # force the MAC address of the bridge to this interface
