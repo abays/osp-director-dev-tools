@@ -1,9 +1,6 @@
 # Set the exit status for the command
 set -e
 
-+# RHEL9 workaroud, allow LEGACY cryptographic policies for SHA1
-+sudo update-crypto-policies --set LEGACY
-
 PUB_NETWORK_ID=$(openstack --os-cloud overcloud network list -f value -c ID --name public)
 if [ -z "$PUB_NETWORK_ID" ]; then
   openstack --os-cloud overcloud network create public --external  --provider-network-type flat --provider-physical-network datacentre
@@ -12,7 +9,7 @@ if [ -z "$PUB_NETWORK_ID" ]; then
   openstack --os-cloud overcloud subnet create pub_sub --subnet-range 2001:db8:fd00:1000::/64 --ip-version 6 --gateway 2001:db8:fd00:1000::1 --allocation-pool start=2001:db8:fd00:1000:ffff::1,end=2001:db8:fd00:1000:ffff::fffe --ipv6-address-mode slaac --ipv6-ra-mode slaac --network public
   openstack --os-cloud overcloud subnet create priv_sub --subnet-range 2001:db8:fd00:6000::/64 --ipv6-address-mode slaac --ipv6-ra-mode slaac --ip-version 6 --network private
 {% else %}
-  openstack --os-cloud overcloud subnet create pub_sub --subnet-range 10.0.0.0/24 --allocation-pool start=10.0.0.100,end=10.0.0.150 --gateway 10.0.0.1 --no-dhcp --network public
+  openstack --os-cloud overcloud subnet create pub_sub --subnet-range 10.46.86.252/26 --allocation-pool start=10.46.86.210,end=10.46.86.240 --gateway 10.46.86.252 --no-dhcp --network public
   openstack --os-cloud overcloud subnet create priv_sub --subnet-range 192.168.0.0/24 --network private
 {% endif %}
   openstack --os-cloud overcloud router create priv_router
