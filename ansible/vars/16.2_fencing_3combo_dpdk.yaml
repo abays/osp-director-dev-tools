@@ -7,8 +7,13 @@ openstackclient_networks:
 enable_fencing: true
 
 ocp_num_workers: 0
+<<<<<<< HEAD
 ocp_master_memory: 40000
 ocp_master_vcpu: 12
+=======
+ocp_master_memory: 80000
+ocp_master_vcpu: 24
+>>>>>>> faa982b... initial dpdk hybrid commit
 ocp_master_disk: 100
 
 osp_release_defaults:

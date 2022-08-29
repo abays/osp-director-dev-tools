@@ -852,6 +852,7 @@
     - OS::TripleO::Services::OVNController
     - OS::TripleO::Services::OVNMetadataAgent
 ###############################################################################
+<<<<<<< HEAD
 # Role: ComputeSriov                                                          #
 ###############################################################################
 - name: ComputeSriov
@@ -1102,11 +1103,17 @@
     - OS::TripleO::Services::Vpp
     - OS::TripleO::Services::Zaqar
 ###############################################################################
+=======
+>>>>>>> faa982b... initial dpdk hybrid commit
 # Role: ComputeOvsDpdk                                                        #
 ###############################################################################
 - name: ComputeOvsDpdk
   description: |
     Compute OvS DPDK Role
+<<<<<<< HEAD
+=======
+  CountDefault: 1
+>>>>>>> faa982b... initial dpdk hybrid commit
   networks:
     InternalApi:
       subnet: internal_api_subnet
