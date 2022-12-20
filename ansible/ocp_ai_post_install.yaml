@@ -69,6 +69,13 @@
       environment:
         <<: *oc_env
 
+    - name: Delete Ironic proxy for OCP 4.12
+      when: ocp_version == "4.12"
+      shell: |
+        oc delete ds -n openshift-machine-api ironic-proxy
+      environment:
+        <<: *oc_env
+
 
     ### OCS (if requested)
 

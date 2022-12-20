@@ -99,8 +99,17 @@
 
   tasks:
   - name: Get the ocp client tar gunzip file
+    when: ocp_version != "4.12"
     get_url:
       url: "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest-{{ ocp_version }}/openshift-client-linux.tar.gz"
+      dest: "/tmp/openshift-client-linux.tar.gz"
+      mode: '0755'
+      timeout: 30
+
+  - name: Get the ocp client tar gunzip file for 4.12
+    when: ocp_version == "4.12"
+    get_url:
+      url: "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/4.12.0-rc.0/openshift-client-linux.tar.gz"
       dest: "/tmp/openshift-client-linux.tar.gz"
       mode: '0755'
       timeout: 30

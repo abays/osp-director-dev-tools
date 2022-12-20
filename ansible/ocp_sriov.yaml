@@ -5,48 +5,74 @@
   - oc_local
 
   tasks:
-  - name: Set directory for sriov yaml files
-    set_fact:
-      yaml_dir: "{{ working_yamls_dir }}/sriov"
+  - name: SRIOV 4.12
+    when: ocp_version == "4.12"
+    block:
+    - name: Make symbolic link for kubectl
+      shell: ln -s $(which oc) $(which oc | rev | cut -d '/' -f 2- | rev)/kubectl
+      register: sriov_install_kubectl_ln
+      failed_when: sriov_install_kubectl_ln.stderr != "" and "File exists" not in sriov_install_kubectl_ln.stderr
 
-  - name: show yaml output dir
-    debug:
-      msg: "yamls will be written to {{ yaml_dir }} locally"
+    - name: Clone SRIOV operator
+      git:
+        repo: "https://github.com/openshift/sriov-network-operator.git"
+        dest: "{{ base_path }}/sriov-network-operator"
+        force: true
 
-  - name: Create local yamldir
-    file:
-      path: "{{ yaml_dir }}"
-      state: directory
-      mode: '0755'
+    - name: Install SRIOV operator
+      shell: |
+        make deploy-setup
+      args:
+        chdir: "{{ base_path }}/sriov-network-operator"
+      environment:
+        PATH: "{{ oc_env_path }}"
+        KUBECONFIG: "{{ kubeconfig }}"
 
-  - name: Render all OpenShift SRIOV Network Operator templates
-    template:
-      src:  "sriov/{{ item }}.j2"
-      dest: "{{ yaml_dir }}/{{ item }}"
-      mode: "0644"
-    with_items:
-    - namespace.yaml
-    - operatorgroup.yaml
-    - subscription.yaml
-    - mcp.yaml
+  - name: SRIOV non-4.12
+    when: ocp_version != "4.12"
+    block:
+    - name: Set directory for sriov yaml files
+      set_fact:
+        yaml_dir: "{{ working_yamls_dir }}/sriov"
 
-  - name: Create namespace, operatorgroup, subscription and machine config pool
-    shell: |
-      set -e
-      oc apply -f "{{ yaml_dir }}"
-    environment:
-      PATH: "{{ oc_env_path }}"
-      KUBECONFIG: "{{ kubeconfig }}"
+    - name: show yaml output dir
+      debug:
+        msg: "yamls will be written to {{ yaml_dir }} locally"
 
-  - name: Wait for OpenShift SRIOV Network Operator to be installed
-    shell: |
-      oc wait pod -n openshift-sriov-network-operator --for condition=Ready \
-          -l name=sriov-network-operator \
-          --timeout={{ default_timeout }}s
-    environment:
-      PATH: "{{ oc_env_path }}"
-      KUBECONFIG: "{{ kubeconfig }}"
-    retries: 50
-    delay: 5
-    register: result
-    until: result.rc == 0
+    - name: Create local yamldir
+      file:
+        path: "{{ yaml_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Render all OpenShift SRIOV Network Operator templates
+      template:
+        src:  "sriov/{{ item }}.j2"
+        dest: "{{ yaml_dir }}/{{ item }}"
+        mode: "0644"
+      with_items:
+      - namespace.yaml
+      - operatorgroup.yaml
+      - subscription.yaml
+      - mcp.yaml
+
+    - name: Create namespace, operatorgroup, subscription and machine config pool
+      shell: |
+        set -e
+        oc apply -f "{{ yaml_dir }}"
+      environment:
+        PATH: "{{ oc_env_path }}"
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Wait for OpenShift SRIOV Network Operator to be installed
+      shell: |
+        oc wait pod -n openshift-sriov-network-operator --for condition=Ready \
+            -l name=sriov-network-operator \
+            --timeout={{ default_timeout }}s
+      environment:
+        PATH: "{{ oc_env_path }}"
+        KUBECONFIG: "{{ kubeconfig }}"
+      retries: 50
+      delay: 5
+      register: result
+      until: result.rc == 0

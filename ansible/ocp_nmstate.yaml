@@ -1,0 +1,42 @@
+---
+- hosts: localhost
+  vars_files: vars/default.yaml
+  roles:
+  - oc_local
+
+  tasks:
+  - name: SRIOV 4.12
+    when: ocp_version == "4.12"
+    block:
+    - name: Install NMState operator
+      shell: |
+        oc apply -f https://github.com/nmstate/kubernetes-nmstate/releases/download/v0.74.0/nmstate.io_nmstates.yaml
+        oc apply -f https://github.com/nmstate/kubernetes-nmstate/releases/download/v0.74.0/namespace.yaml
+        oc apply -f https://github.com/nmstate/kubernetes-nmstate/releases/download/v0.74.0/service_account.yaml
+        oc apply -f https://github.com/nmstate/kubernetes-nmstate/releases/download/v0.74.0/role.yaml
+        oc apply -f https://github.com/nmstate/kubernetes-nmstate/releases/download/v0.74.0/role_binding.yaml
+        oc apply -f https://github.com/nmstate/kubernetes-nmstate/releases/download/v0.74.0/operator.yaml
+      environment: &oc_env
+        PATH: "{{ oc_env_path }}"
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Create NMState deployment
+      shell: |
+        cat <<EOF | oc apply -f -
+        apiVersion: nmstate.io/v1
+        kind: NMState
+        metadata:
+          name: nmstate
+        EOF
+      environment:
+        <<: *oc_env
+
+    - name: Wait until all NMState CRDs are populated
+      shell: |
+        oc get crd nodenetworkconfigurationenactments.nmstate.io && oc get crd nodenetworkconfigurationpolicies.nmstate.io
+      environment:
+        <<: *oc_env
+      retries: 10
+      delay: 30
+      register: result
+      until: result.rc == 0

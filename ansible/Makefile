@@ -7,6 +7,7 @@ default: \
   ocp_install \
   cnv_install \
   sriov_install \
+  nmstate_install \
   olm \
   openstack
 
@@ -111,6 +112,13 @@ sriov_install: hosts local-defaults.yaml
 	-e @local-defaults.yaml \
 	ocp_sriov.yaml \
 	virt_sriov.yaml
+
+nmstate_install: hosts local-defaults.yaml
+	ANSIBLE_FORCE_COLOR=true ansible-playbook \
+	-i hosts \
+	-e @vars/${OSP_RELEASE}.yaml \
+	-e @local-defaults.yaml \
+	ocp_nmstate.yaml
 
 perf_install: hosts local-defaults.yaml
 	ANSIBLE_FORCE_COLOR=true ansible-playbook \
